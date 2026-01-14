@@ -1,0 +1,14 @@
+{
+  "name": "BO Finance v4",
+  "short_name": "BO Finance",
+  "description": "Gestão financeira familiar compartilhada entre Samsung e iPhone",
+  "requestFramePermissions": [],
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/10433/10433048.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
