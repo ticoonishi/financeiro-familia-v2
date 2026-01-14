@@ -1,0 +1,158 @@
+
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Logo - BO Finance</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Outfit', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: #f1f5f9;
+            margin: 0;
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            padding: 40px;
+            border-radius: 48px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 550px;
+            width: 100%;
+        }
+        canvas {
+            border-radius: 80px;
+            box-shadow: 0 15px 35px rgba(37, 99, 235, 0.2);
+            margin-bottom: 30px;
+            max-width: 100%;
+            height: auto;
+        }
+        h1 {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #94a3b8;
+            letter-spacing: 0.3em;
+            margin-bottom: 10px;
+            font-weight: 900;
+        }
+        p {
+            font-size: 14px;
+            color: #64748b;
+            margin-bottom: 30px;
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 20px 40px;
+            border-radius: 24px;
+            font-size: 12px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3);
+        }
+        button:hover {
+            transform: translateY(-2px);
+            background: #1d4ed8;
+            box-shadow: 0 15px 30px rgba(37, 99, 235, 0.4);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Asset Generator</h1>
+        <p>Logo oficial BO Finance V1 (512x512)</p>
+        
+        <canvas id="logoCanvas" width="512" height="512"></canvas>
+        
+        <br>
+        
+        <button id="downloadBtn">
+            Baixar logo.png
+        </button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('logoCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function drawLogo() {
+            const size = 512;
+            const radius = 110; // Proporção do rounded-24 do app em escala 512
+
+            // 1. Fundo Azul (Tailwind blue-600: #2563eb)
+            ctx.fillStyle = '#2563eb';
+            ctx.beginPath();
+            ctx.roundRect(0, 0, size, size, radius);
+            ctx.fill();
+
+            // 2. Configuração do Traço Branco
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 26; // Proporcional ao strokeWidth=3 do original 24px
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            // 3. Centralização e Escala do Ícone
+            // O ícone original é baseado em um grid de 24x24
+            const iconScale = size / 24 * 0.65; // Ocupa 65% do espaço
+            const offset = (size - (24 * iconScale)) / 2;
+
+            ctx.save();
+            ctx.translate(offset, offset);
+            ctx.scale(iconScale, iconScale);
+
+            // Path: Vertical line (M12 2v20)
+            ctx.beginPath();
+            ctx.moveTo(12, 2);
+            ctx.lineTo(12, 22);
+            ctx.stroke();
+
+            // Path: Top Arrow (m17 5-5-3-5 3)
+            ctx.beginPath();
+            ctx.moveTo(17, 5);
+            ctx.lineTo(12, 2);
+            ctx.lineTo(7, 5);
+            ctx.stroke();
+
+            // Path: Bottom Arrow (m17 19-5 3-5-3)
+            ctx.beginPath();
+            ctx.moveTo(17, 19);
+            ctx.lineTo(12, 22);
+            ctx.lineTo(7, 19);
+            ctx.stroke();
+
+            // Path: Horizontal line (M2 12h20)
+            ctx.beginPath();
+            ctx.moveTo(2, 12);
+            ctx.lineTo(22, 12);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        // Desenhar ao carregar
+        drawLogo();
+
+        // Lógica de Download
+        document.getElementById('downloadBtn').onclick = () => {
+            const link = document.createElement('a');
+            link.download = 'logo.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        };
+    </script>
+</body>
+</html>

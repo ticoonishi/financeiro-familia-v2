@@ -330,11 +330,18 @@ const App: React.FC = () => {
 
       <header className="bg-white/90 backdrop-blur-2xl sticky top-0 z-50 border-b border-slate-100 px-6 py-5">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex flex-col">
-            <h1 className="text-lg font-black text-slate-900 tracking-tight uppercase">BO Finance V1</h1>
-            <div className="flex items-center gap-1.5">
-               <div className={`w-1.5 h-1.5 rounded-full ${cloudMessage.ok ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
-               <span className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">{cloudMessage.msg} {lastSync && `• ${lastSync}`}</span>
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2v20"/><path d="m17 5-5-3-5 3"/><path d="m17 19-5 3-5-3"/><path d="M2 12h20"/>
+              </svg>
+            </div>
+            <div className="flex flex-col">
+              <h1 className="text-lg font-black text-slate-900 tracking-tight uppercase">BO Finance V1</h1>
+              <div className="flex items-center gap-1.5">
+                 <div className={`w-1.5 h-1.5 rounded-full ${cloudMessage.ok ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                 <span className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">{cloudMessage.msg} {lastSync && `• ${lastSync}`}</span>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
