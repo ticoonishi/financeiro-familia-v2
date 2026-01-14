@@ -125,6 +125,24 @@ const Settings: React.FC<SettingsProps> = ({
 
   return (
     <div className="space-y-8 pb-40 font-['Outfit']">
+      {/* SEÇÃO: PERFIL */}
+      <section className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-100">
+        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">Meu Perfil</h3>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{currentUser.name}</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{currentUser.email}</p>
+          </div>
+          <button 
+            onClick={onLogout}
+            className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-100 transition-all"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Sair
+          </button>
+        </div>
+      </section>
+
       {/* SEÇÃO: PREFERÊNCIAS */}
       <section className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-100">
         <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">Preferências</h3>

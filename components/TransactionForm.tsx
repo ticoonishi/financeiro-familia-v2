@@ -7,9 +7,11 @@ interface TransactionFormProps {
   categories: Category[];
   accounts: Account[];
   currentUser: User;
-  onSave: (transaction: Omit<Transaction, 'id' | 'createdBy' | 'createdAt'>) => void;
+  onSave: (transaction: Omit<Transaction, 'id' | 'createdBy' | 'createdAt'> & { destinationAccountId?: string }) => void;
   onCancel: () => void;
   initialType?: TransactionType;
+  initialData?: Transaction; // Adicionado para edição
+  initialDestinationAccountId?: string; // Novo: Conta destino original
 }
 
 const TransactionForm: React.FC<TransactionFormProps> = ({ 
@@ -18,22 +20,28 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
   currentUser,
   onSave, 
   onCancel,
-  initialType = TransactionType.EXPENSE
+  initialType = TransactionType.EXPENSE,
+  initialData,
+  initialDestinationAccountId
 }) => {
-  const [type, setType] = useState<TransactionType>(initialType);
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [amount, setAmount] = useState<string>('0,00');
-  const [description, setDescription] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [accountId, setAccountId] = useState('');
-  const [selectedCardId, setSelectedCardId] = useState(''); 
-  const [installments, setInstallments] = useState(1);
+  const isEditing = !!initialData;
+  const [type, setType] = useState<TransactionType>(initialData?.type || initialType);
+  const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
+  const [amount, setAmount] = useState<string>(
+    initialData ? (initialData.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'
+  );
+  const [description, setDescription] = useState(initialData?.description.replace(/\[CARD:.*?\]\s*/, '').replace(/\[TRANSFERÊNCIA\]\s*/, '') || '');
+  const [categoryId, setCategoryId] = useState(initialData?.categoryId || '');
+  const [accountId, setAccountId] = useState(initialData?.accountId || '');
+  const [selectedCardId, setSelectedCardId] = useState(initialData?.cardId || ''); 
+  const [destinationAccountId, setDestinationAccountId] = useState(initialDestinationAccountId || ''); 
+  const [installments, setInstallments] = useState(initialData?.totalInstallments || 1);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const formatAsCurrencyInput = (value: string) => {
-    const cleanValue = value.replace(/\D/g, "");
-    if (!cleanValue) return "0,00";
-    const cents = parseInt(cleanValue, 10);
+    const digits = value.replace(/\D/g, "");
+    if (!digits) return "0,00";
+    const cents = parseInt(digits, 10);
     return (cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
@@ -48,17 +56,15 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
   const availableAccounts = accounts.filter(a => a.isActive && (type === TransactionType.INCOME ? !a.isCreditCard : true));
   const creditCards = accounts.filter(a => a.isCreditCard && a.isActive);
   
-  const selectedAccount = accounts.find(a => a.id === accountId);
-  const isCreditCardPurchase = selectedAccount?.isCreditCard;
-  
   const selectedCategory = categories.find(c => c.id === categoryId);
   const isPayingCreditCard = selectedCategory?.name.toLowerCase().includes('cartão de crédito');
+  const isTransfer = selectedCategory?.name.toLowerCase().includes('transferências entre contas');
 
   useEffect(() => {
-    if (currentUser.defaultAccountId && !accountId) {
+    if (currentUser.defaultAccountId && !accountId && !isEditing) {
       setAccountId(currentUser.defaultAccountId);
     }
-  }, [currentUser.defaultAccountId, accountId]);
+  }, [currentUser.defaultAccountId, accountId, isEditing]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,8 +73,9 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
     const parsedAmount = parseCurrencyToNumber(amount);
     if (parsedAmount <= 0) { alert("Informe um valor válido."); return; }
     if (!categoryId) { alert("Selecione o grupo."); return; }
-    if (!accountId) { alert("Selecione a conta de origem."); return; }
+    if (!accountId) { alert("Selecione a conta."); return; }
     if (isPayingCreditCard && !selectedCardId) { alert("Selecione qual cartão está pagando."); return; }
+    if (isTransfer && !destinationAccountId) { alert("Selecione a conta de destino."); return; }
 
     setIsSubmitting(true);
 
@@ -80,13 +87,18 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
       accountId,
       cardId: isPayingCreditCard ? selectedCardId : undefined,
       type,
-      totalInstallments: isCreditCardPurchase ? installments : 1,
-      installmentNumber: 1,
+      totalInstallments: (accountId && accounts.find(a => a.id === accountId)?.isCreditCard) ? installments : 1,
+      installmentNumber: initialData?.installmentNumber || 1,
+      destinationAccountId: isTransfer ? destinationAccountId : undefined
     });
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-[40px] shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto font-['Outfit']">
+      <div className="text-center mb-2">
+         <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">{isEditing ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
+      </div>
+
       <div className="flex bg-slate-100 p-1.5 rounded-2xl">
         <button type="button" onClick={() => { setType(TransactionType.INCOME); setCategoryId(''); }}
           className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${type === TransactionType.INCOME ? 'bg-white shadow-sm text-emerald-600' : 'text-slate-400'}`}>
@@ -105,7 +117,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
             className="w-full px-5 py-5 rounded-2xl bg-slate-50 border border-slate-100 font-black text-3xl text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20" />
         </div>
         <div className="space-y-1.5">
-          <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">Data do Pagamento</label>
+          <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">Data</label>
           <input required type="date" value={date} onChange={(e) => setDate(e.target.value)}
             className="w-full px-5 py-5 rounded-2xl bg-slate-50 border border-slate-100 font-bold text-slate-700 h-full outline-none" />
         </div>
@@ -122,7 +134,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
         </div>
         <div className="space-y-1.5">
           <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">
-            {isPayingCreditCard ? 'Conta de Origem' : 'Conta / Cartão'}
+            {isTransfer ? 'Conta de Origem' : (isPayingCreditCard ? 'Conta de Pagamento' : 'Conta / Cartão')}
           </label>
           <select required value={accountId} onChange={(e) => setAccountId(e.target.value)}
             className="w-full px-5 py-5 rounded-2xl bg-slate-50 border border-slate-100 font-bold text-slate-700 outline-none">
@@ -131,6 +143,22 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
           </select>
         </div>
       </div>
+
+      {isTransfer && (
+        <div className="p-6 bg-emerald-50/50 rounded-[32px] border border-emerald-100 space-y-3 animate-in slide-in-from-top-2 duration-300">
+          <label className="text-[10px] font-black text-emerald-600 uppercase ml-1 tracking-widest flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="m18 8 4 4-4 4"/><path d="M2 12h20"/><path d="m6 16-4-4 4-4"/></svg>
+            Para qual conta vai o dinheiro?
+          </label>
+          <select required value={destinationAccountId} onChange={(e) => setDestinationAccountId(e.target.value)}
+            className="w-full px-5 py-4 rounded-2xl bg-white border border-emerald-200 font-black text-emerald-700 outline-none focus:ring-4 focus:ring-emerald-500/10">
+            <option value="">Selecione a Conta Destino...</option>
+            {accounts.filter(a => a.isActive && !a.isCreditCard && a.id !== accountId).map(acc => (
+              <option key={acc.id} value={acc.id}>{acc.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {isPayingCreditCard && (
         <div className="p-6 bg-blue-50/50 rounded-[32px] border border-blue-100 space-y-3 animate-in slide-in-from-top-2 duration-300">
@@ -153,7 +181,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
             className="w-full px-5 py-5 rounded-2xl bg-slate-50 border border-slate-100 font-bold text-slate-700 outline-none" />
         </div>
         
-        {isCreditCardPurchase && (
+        {accountId && accounts.find(a => a.id === accountId)?.isCreditCard && (
           <div className="space-y-1.5 animate-in slide-in-from-right duration-300">
             <label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">Número de Parcelas</label>
             <select value={installments} onChange={(e) => setInstallments(Number(e.target.value))}
@@ -167,7 +195,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
       <div className="flex gap-4 pt-4">
         <Button variant="secondary" onClick={onCancel} className="flex-1 py-5 text-[10px] font-black uppercase tracking-widest">Cancelar</Button>
         <Button variant="primary" type="submit" disabled={isSubmitting} className="flex-[2] py-5 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-100">
-          {isSubmitting ? 'Salvando...' : 'Registrar Lançamento'}
+          {isSubmitting ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Registrar Lançamento')}
         </Button>
       </div>
     </form>

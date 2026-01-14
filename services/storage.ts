@@ -7,6 +7,36 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// Auth Helpers
+export const signIn = async (email: string, password: string) => {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  return data;
+};
+
+export const signOut = async () => {
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
+};
+
+export const resetPasswordForEmail = async (email: string) => {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin,
+  });
+  if (error) throw error;
+};
+
+export const updatePassword = async (password: string) => {
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+};
+
+export const onAuthStateChange = (callback: (session: any, event: string) => void) => {
+  return supabase.auth.onAuthStateChange((event, session) => {
+    callback(session, event);
+  });
+};
+
 const normalizeType = (type: any): TransactionType => {
   const t = String(type || '').toUpperCase().trim();
   if (t === 'INCOME' || t === 'RECEITA' || t === 'ENTRADA') return TransactionType.INCOME;
@@ -21,7 +51,6 @@ const mapTransaction = (t: any): Transaction => ({
   description: t.description || '',
   categoryId: String(t.category_id || ''),
   accountId: String(t.account_id || ''),
-  // Removido cardId da coluna física pois ela não existe no banco do usuário
   type: normalizeType(t.type),
   createdBy: t.created_by || 'Sistema',
   billItems: t.bill_items || [],
@@ -88,12 +117,12 @@ export const fetchAccounts = async (): Promise<Account[]> => {
 };
 
 export const insertTransaction = async (t: Omit<Transaction, 'id' | 'createdAt'>) => {
+  // FIX: Using camelCase property names on input object 't' to match Transaction type
   const { data, error } = await supabase.from('transacoes').insert([{
     amount: t.amount,
     description: t.description,
     category_id: t.categoryId,
     account_id: t.accountId,
-    // card_id removido para evitar erro de coluna inexistente no Supabase
     type: t.type,
     created_by: t.createdBy,
     date: t.date,
@@ -104,6 +133,23 @@ export const insertTransaction = async (t: Omit<Transaction, 'id' | 'createdAt'>
   }]).select();
   if (error) throw new Error(error.message);
   if (!data || data.length === 0) throw new Error("Falha ao inserir transação");
+  return mapTransaction(data[0]);
+};
+
+export const updateTransaction = async (id: string, t: Partial<Transaction>) => {
+  const payload: any = {};
+  if (t.amount !== undefined) payload.amount = t.amount;
+  if (t.description !== undefined) payload.description = t.description;
+  if (t.categoryId !== undefined) payload.category_id = t.categoryId;
+  if (t.accountId !== undefined) payload.account_id = t.accountId;
+  if (t.type !== undefined) payload.type = t.type;
+  if (t.date !== undefined) payload.date = t.date;
+  if (t.totalInstallments !== undefined) payload.total_installments = t.totalInstallments;
+  if (t.billItems !== undefined) payload.bill_items = t.billItems;
+
+  const { data, error } = await supabase.from('transacoes').update(payload).eq('id', id).select();
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) throw new Error("Lançamento não encontrado para atualizar");
   return mapTransaction(data[0]);
 };
 
@@ -124,6 +170,7 @@ export const insertAccount = async (a: Omit<Account, 'id'>) => {
     is_active: a.isActive,
     is_credit_card: a.isCreditCard,
     initial_balance: a.initialBalance,
+    // FIX: Using initialBalanceDate instead of initial_balance_date to match Omit<Account, 'id'>
     initial_balance_date: a.initialBalanceDate || '2026-01-01',
     closing_day: a.closingDay
   }]).select();

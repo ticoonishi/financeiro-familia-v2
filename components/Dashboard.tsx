@@ -1,28 +1,65 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer 
 } from 'recharts';
-import { Transaction, Category, DashboardStats } from '../types';
+import { Transaction, Category, DashboardStats, Account, TransactionType } from '../types';
 
 interface DashboardProps {
   stats: DashboardStats;
   onCategoryClick: (categoryId: string) => void;
   transactions: Transaction[];
   categories: Category[];
+  accounts: Account[];
 }
 
 const COLORS_INCOME = ['#059669', '#10b981', '#34d399', '#6ee7b7', '#d1fae5'];
 const COLORS_EXPENSE = ['#4f46e5', '#6366f1', '#818cf8', '#a5b4fc', '#e0e7ff'];
 
-const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
+const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, accounts }) => {
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 
+  // Cálculo de saldos individuais por conta
+  const accountBalances = useMemo(() => {
+    return accounts
+      .filter(acc => acc.isActive && !acc.isCreditCard)
+      .map(acc => {
+        const accountTransactions = transactions.filter(t => t.accountId === acc.id);
+        const income = accountTransactions
+          .filter(t => t.type === TransactionType.INCOME)
+          .reduce((sum, t) => sum + t.amount, 0);
+        const expense = accountTransactions
+          .filter(t => t.type === TransactionType.EXPENSE)
+          .reduce((sum, t) => sum + t.amount, 0);
+        
+        return {
+          name: acc.name,
+          balance: (acc.initialBalance || 0) + income - expense
+        };
+      })
+      .sort((a, b) => b.balance - a.balance);
+  }, [accounts, transactions]);
+
   return (
     <div className="space-y-8">
-      {/* Resumo Financeiro */}
+      {/* Seção de Saldos por Conta */}
+      <div className="space-y-4">
+        <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] ml-1">Saldos Disponíveis</h2>
+        <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
+          {accountBalances.map((acc, idx) => (
+            <div key={idx} className="min-w-[160px] bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex flex-col justify-between">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate">{acc.name}</span>
+              <p className={`text-lg font-black mt-2 tracking-tight ${acc.balance >= 0 ? 'text-slate-800' : 'text-rose-500'}`}>
+                {formatCurrency(acc.balance)}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Resumo Financeiro Geral */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="gradient-income p-10 rounded-[48px] text-white shadow-2xl shadow-emerald-200/40 relative overflow-hidden group">
           <div className="relative z-10">
@@ -50,7 +87,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats }) => {
       {/* Saldo Líquido */}
       <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
         <div className="text-center md:text-left">
-          <span className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em]">Balanço Mensal</span>
+          <span className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em]">Balanço Mensal Líquido</span>
           <h3 className={`text-5xl font-black mt-2 tracking-tighter ${stats.balance >= 0 ? 'text-slate-800' : 'text-rose-500'}`}>
             {formatCurrency(stats.balance)}
           </h3>

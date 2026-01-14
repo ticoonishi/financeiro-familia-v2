@@ -1,3 +1,4 @@
+
 export enum TransactionType {
   INCOME = 'INCOME',
   EXPENSE = 'EXPENSE'
@@ -24,6 +25,7 @@ export interface Account {
   isCreditCard: boolean;
   initialBalance?: number; 
   initialBalanceDate?: string;
+  closingDay?: number; // Novo: Dia de fechamento da fatura
 }
 
 export interface BillItem {
@@ -46,7 +48,11 @@ export interface Transaction {
   type: TransactionType;
   billItems?: BillItem[]; 
   createdBy: string;    
-  updatedBy?: string;   
+  updatedBy?: string;
+  // Novos campos para parcelamento:
+  installmentNumber?: number;
+  totalInstallments?: number;
+  installmentGroupId?: string;
 }
 
 export type TimeRange = 'monthly' | 'bi-monthly' | 'quarterly' | 'semi-annual' | 'annual' | 'fortnight';
