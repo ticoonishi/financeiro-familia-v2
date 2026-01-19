@@ -25,7 +25,7 @@ export interface Account {
   isCreditCard: boolean;
   initialBalance?: number; 
   initialBalanceDate?: string;
-  closingDay?: number; // Novo: Dia de fechamento da fatura
+  closingDay?: number; 
 }
 
 export interface BillItem {
@@ -49,7 +49,6 @@ export interface Transaction {
   billItems?: BillItem[]; 
   createdBy: string;    
   updatedBy?: string;
-  // Novos campos para parcelamento:
   installmentNumber?: number;
   totalInstallments?: number;
   installmentGroupId?: string;
@@ -67,4 +66,13 @@ export interface DashboardStats {
   previousPeriodIncome: number;
   previousPeriodExpense: number;
   monthlyHistory: { month: string; income: number; expense: number }[];
+  // Added to fix missing property error
+  averageMonthlyExpense: number;
+  // Campos de Auditoria para Autodiagnóstico
+  audit?: {
+    rawCardPayment: number;
+    totalPurchasesAbated: number;
+    totalInternalItemsAbated: number;
+    finalResidual: number;
+  };
 }

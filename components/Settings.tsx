@@ -24,7 +24,7 @@ interface SettingsProps {
 }
 
 const Settings: React.FC<SettingsProps> = ({
-  categories, accounts, currentUser,
+  categories, accounts, transactions, currentUser,
   onAddCategory, onAddAccount, onToggleCategory, onToggleAccount, onDeleteCategory, onDeleteAccount,
   onUpdateAccount, onChangeDefaultAccount, onLogout
 }) => {
@@ -59,24 +59,61 @@ const Settings: React.FC<SettingsProps> = ({
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 
+  // --- FUNÇÕES DE EXPORTAÇÃO CSV ---
+  const downloadCSV = (data: any[], filename: string) => {
+    if (data.length === 0) return;
+    const headers = Object.keys(data[0]);
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => headers.map(fieldName => `"${String(row[fieldName] || '').replace(/"/g, '""')}"`).join(','))
+    ].join('\r\n');
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportTransactions = () => {
+    const dataToExport = transactions.map(t => ({
+      "Data": t.date,
+      "Valor": t.amount.toFixed(2),
+      "Descricao": t.description,
+      "Tipo": t.type === TransactionType.INCOME ? "RECEITA" : "DESPESA",
+      "Grupo": categories.find(c => c.id === t.categoryId)?.name || "N/A",
+      "Conta_Cartao": accounts.find(a => a.id === t.accountId)?.name || "N/A",
+      "Criado_Por": t.createdBy,
+      "Parcela": t.installmentNumber ? `${t.installmentNumber}/${t.totalInstallments}` : "1/1"
+    }));
+    downloadCSV(dataToExport, `bo_finance_lancamentos_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
+  const handleExportCategories = () => {
+    const dataToExport = categories.map(c => ({
+      "Nome_Grupo": c.name,
+      "Tipo": c.type === TransactionType.INCOME ? "RECEITA" : "DESPESA",
+      "Status": c.isActive ? "ATIVO" : "INATIVO"
+    }));
+    downloadCSV(dataToExport, `bo_finance_grupos_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+  // ---------------------------------
+
   const handleAddAccount = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAccName.trim() || isSubmitting) return;
-    
-    // Validar dia de fechamento se for cartão
     if (newAccIsCard && (newAccClosingDay < 1 || newAccClosingDay > 30)) {
       alert("O dia de fechamento deve ser entre 1 e 30.");
       return;
     }
-
     setIsSubmitting(true);
-    
-    // Para cartões, ignoramos saldo e data inicial
     const balance = newAccIsCard ? 0 : parseCurrencyToNumber(newAccInitialBalance);
     const date = newAccIsCard ? undefined : newAccInitialDate;
-    
     onAddAccount(newAccName.trim(), newAccIsCard, balance, newAccIsCard ? newAccClosingDay : undefined, date);
-    
     setNewAccName('');
     setNewAccInitialBalance('0,00');
     setNewAccIsCard(false);
@@ -95,16 +132,11 @@ const Settings: React.FC<SettingsProps> = ({
       alert("O dia de fechamento deve ser entre 1 e 30.");
       return;
     }
-
-    const updates: Partial<Account> = {
-      closingDay: isCard ? editClosingDay : undefined,
-    };
-    
+    const updates: Partial<Account> = { closingDay: isCard ? editClosingDay : undefined };
     if (!isCard) {
       updates.initialBalance = parseCurrencyToNumber(editBalance);
       updates.initialBalanceDate = editDate;
     }
-
     onUpdateAccount(id, updates);
     setEditingId(null);
   };
@@ -118,7 +150,6 @@ const Settings: React.FC<SettingsProps> = ({
 
   const incomeCategories = categories.filter(c => c.type === TransactionType.INCOME);
   const expenseCategories = categories.filter(c => c.type === TransactionType.EXPENSE);
-  
   const bankAccounts = accounts.filter(a => !a.isCreditCard);
   const creditCards = accounts.filter(a => a.isCreditCard);
   const activeBankAccounts = bankAccounts.filter(a => a.isActive);
@@ -347,6 +378,22 @@ const Settings: React.FC<SettingsProps> = ({
               )}
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* SEÇÃO: BACKUP E EXPORTAÇÃO (NOVA) */}
+      <section className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-100">
+        <h3 className="text-[11px] font-black text-blue-500 uppercase tracking-[0.2em] mb-6">Backup e Exportação</h3>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Exporte seus dados em formato CSV para planilhas.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Button variant="secondary" onClick={handleExportTransactions} className="py-4 text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Exportar Lançamentos
+          </Button>
+          <Button variant="secondary" onClick={handleExportCategories} className="py-4 text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Exportar Grupos
+          </Button>
         </div>
       </section>
 

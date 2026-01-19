@@ -59,16 +59,23 @@ const BillDetailModal: React.FC<BillDetailModalProps> = ({
   };
 
   const formatValueForInput = (val: number) => {
-    if (val === 0) return '0,00';
-    return val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (isNaN(val)) return "0,00";
+    const isNeg = val < 0;
+    const absVal = Math.abs(val);
+    const formatted = absVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return isNeg ? `-${formatted}` : formatted;
   };
 
   const handlePurchaseChange = (id: string, field: 'description' | 'amount', value: string) => {
     setEditablePurchases(prev => prev.map(p => {
       if (p.id !== id) return p;
       if (field === 'amount') {
+        // CIRÚRGICO: Permite o caractere '-' para estornos
+        const isNegative = value.includes('-');
         const digits = value.replace(/\D/g, '');
-        return { ...p, amount: Number(digits) / 100 };
+        if (!digits && isNegative) return { ...p, amount: -0 }; // Estado intermediário enquanto digita o sinal
+        const amount = (Number(digits) / 100) * (isNegative ? -1 : 1);
+        return { ...p, amount };
       }
       return { ...p, [field]: value.toUpperCase() };
     }));
@@ -78,8 +85,12 @@ const BillDetailModal: React.FC<BillDetailModalProps> = ({
     setManualItems(prev => prev.map(item => {
       if (item.id !== id) return item;
       if (field === 'amount' && typeof value === 'string') {
+        // CIRÚRGICO: Permite o caractere '-' para estornos manuais
+        const isNegative = value.includes('-');
         const digits = value.replace(/\D/g, '');
-        return { ...item, amount: Number(digits) / 100 };
+        if (!digits && isNegative) return { ...item, amount: -0 };
+        const amount = (Number(digits) / 100) * (isNegative ? -1 : 1);
+        return { ...item, amount };
       }
       return { ...item, [field]: value };
     }));
@@ -131,7 +142,6 @@ const BillDetailModal: React.FC<BillDetailModalProps> = ({
                   <label className="text-[8px] font-black text-emerald-500 uppercase ml-1">Valor R$</label>
                   <input 
                     type="text"
-                    inputMode="numeric"
                     value={formatValueForInput(p.amount)} 
                     onChange={e => handlePurchaseChange(p.id, 'amount', e.target.value)}
                     className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black outline-none text-emerald-600"
@@ -170,7 +180,6 @@ const BillDetailModal: React.FC<BillDetailModalProps> = ({
                     <label className="text-[8px] font-black text-blue-500 uppercase ml-1">Valor R$</label>
                     <input 
                       type="text"
-                      inputMode="numeric"
                       value={formatValueForInput(item.amount)} 
                       onChange={e => handleManualItemChange(item.id, 'amount', e.target.value)}
                       className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black outline-none text-blue-600"

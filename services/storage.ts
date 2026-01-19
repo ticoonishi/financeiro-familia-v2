@@ -117,7 +117,6 @@ export const fetchAccounts = async (): Promise<Account[]> => {
 };
 
 export const insertTransaction = async (t: Omit<Transaction, 'id' | 'createdAt'>) => {
-  // FIX: Using camelCase property names on input object 't' to match Transaction type
   const { data, error } = await supabase.from('transacoes').insert([{
     amount: t.amount,
     description: t.description,
@@ -153,6 +152,11 @@ export const updateTransaction = async (id: string, t: Partial<Transaction>) => 
   return mapTransaction(data[0]);
 };
 
+export const deleteTransaction = async (id: string) => {
+  const { error } = await supabase.from('transacoes').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+};
+
 export const insertCategory = async (c: Omit<Category, 'id'>) => {
   const { data, error } = await supabase.from('categorias').insert([{
     name: c.name,
@@ -170,7 +174,6 @@ export const insertAccount = async (a: Omit<Account, 'id'>) => {
     is_active: a.isActive,
     is_credit_card: a.isCreditCard,
     initial_balance: a.initialBalance,
-    // FIX: Using initialBalanceDate instead of initial_balance_date to match Omit<Account, 'id'>
     initial_balance_date: a.initialBalanceDate || '2026-01-01',
     closing_day: a.closingDay
   }]).select();

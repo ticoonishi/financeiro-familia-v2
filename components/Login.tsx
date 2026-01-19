@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { signIn, resetPasswordForEmail, updatePassword } from '../services/storage';
 import Button from './Button';
@@ -14,6 +13,7 @@ const Login: React.FC<LoginProps> = ({ onNotify, initialMode = 'login' }) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   useEffect(() => {
     setMode(initialMode);
@@ -22,11 +22,16 @@ const Login: React.FC<LoginProps> = ({ onNotify, initialMode = 'login' }) => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setLoginError(null);
     try {
       await signIn(email, password);
       onNotify("Bem-vindo de volta!", "success");
     } catch (error: any) {
-      onNotify(error.message || "Erro ao acessar conta", "error");
+      const isInvalid = error.status === 400 || error.message?.toLowerCase().includes('invalid');
+      const msg = isInvalid ? "Usuário ou senha inválidos" : (error.message || "Erro ao acessar conta");
+      
+      setLoginError(msg);
+      onNotify(msg, "error");
     } finally {
       setIsLoading(false);
     }
@@ -68,10 +73,15 @@ const Login: React.FC<LoginProps> = ({ onNotify, initialMode = 'login' }) => {
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 font-['Outfit']">
       <div className="w-full max-sm:max-w-xs animate-in fade-in zoom-in duration-500">
         <div className="mb-10 text-center">
-          <div className="w-20 h-20 bg-blue-600 rounded-[24px] mx-auto flex items-center justify-center shadow-xl shadow-blue-200 mb-6">
-             <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="m17 5-5-3-5 3"/><path d="m17 19-5 3-5-3"/><path d="M2 12h20"/></svg>
+          {/* Ajuste Cirúrgico: Container da logo otimizado para preenchimento total */}
+          <div className="w-24 h-24 bg-white rounded-[32px] mx-auto flex items-center justify-center shadow-2xl shadow-blue-500/10 mb-6 overflow-hidden">
+             <img 
+               src="https://i.imgur.com/BaBxqwh.jpg" 
+               alt="BO FINANCE" 
+               style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+             />
           </div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tighter uppercase">BO Finance</h1>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tighter uppercase">BO FINANCE</h1>
           <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.3em] mt-2">
             {mode === 'login' ? 'Gestão Familiar' : mode === 'forgot' ? 'Recuperação de Acesso' : 'Definir Nova Senha'}
           </p>
@@ -86,7 +96,7 @@ const Login: React.FC<LoginProps> = ({ onNotify, initialMode = 'login' }) => {
                 className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700 text-center focus:ring-2 focus:ring-blue-500/10 transition-all" 
                 placeholder="E-mail" 
                 value={email} 
-                onChange={e => setEmail(e.target.value)} 
+                onChange={e => { setEmail(e.target.value); setLoginError(null); }} 
               />
               <input 
                 required 
@@ -94,14 +104,21 @@ const Login: React.FC<LoginProps> = ({ onNotify, initialMode = 'login' }) => {
                 type="password" 
                 placeholder="Sua Chave" 
                 value={password} 
-                onChange={e => setPassword(e.target.value)} 
+                onChange={e => { setPassword(e.target.value); setLoginError(null); }} 
               />
+              
+              {loginError && (
+                <p className="text-rose-500 text-[9px] font-black uppercase text-center animate-in fade-in slide-in-from-top-1 tracking-widest px-2">
+                  {loginError}
+                </p>
+              )}
+
               <Button fullWidth type="submit" disabled={isLoading} className="py-5 font-black uppercase tracking-widest text-[10px]">
                 {isLoading ? 'Acessando...' : 'Acessar'}
               </Button>
               <button 
                 type="button" 
-                onClick={() => setMode('forgot')}
+                onClick={() => { setMode('forgot'); setLoginError(null); }}
                 className="w-full text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-blue-500 transition-colors"
               >
                 Esqueci minha senha
