@@ -5,6 +5,7 @@ import {
 import { 
   getCloudStatus, fetchTransactions, fetchCategories, fetchAccounts, insertTransaction, updateTransaction, deleteTransaction, insertCategory, insertAccount, deleteAccount, deleteCategory, updateAccount, updateCategory, supabase, signOut, onAuthStateChange 
 } from './services/storage';
+import { APP_VERSION } from './constants';
 import Dashboard from './components/Dashboard';
 import TransactionForm from './components/TransactionForm';
 import Settings from './components/Settings';
@@ -51,7 +52,6 @@ const App: React.FC = () => {
     }
   }, [showNotify]);
 
-  // Lógica de Logout por Inatividade (5 minutos) - PRESERVADA
   useEffect(() => {
     if (!currentUser) return;
 
@@ -61,7 +61,7 @@ const App: React.FC = () => {
       if (inactivityTimer) window.clearTimeout(inactivityTimer);
       inactivityTimer = window.setTimeout(() => {
         handleLogout();
-      }, 300000); // 300.000ms = 5 minutos
+      }, 300000); 
     };
 
     const interactionEvents = ['mousedown', 'keydown', 'touchstart', 'scroll'];
@@ -179,7 +179,6 @@ const App: React.FC = () => {
   };
 
   const handleDeleteTransaction = useCallback(async (id: string) => {
-    if (!confirm("Deseja realmente excluir este lançamento?")) return;
     setIsSyncing(true);
     try {
       await deleteTransaction(id);
@@ -192,16 +191,60 @@ const App: React.FC = () => {
     }
   }, [loadInitialData, showNotify]);
 
+  const handlePostponePurchase = useCallback(async (purchase: Transaction) => {
+    console.log('--- LOCKDOWN DE INTEGRIDADE: ADIANDO PARCELA ---', purchase.id);
+    if (!currentUser) return;
+    setIsSyncing(true);
+    try {
+      const d = new Date(purchase.date + 'T12:00:00');
+      d.setMonth(d.getMonth() + 1);
+      const formattedDate = d.toISOString().split('T')[0];
+      const { error } = await supabase
+        .from('transacoes')
+        .update({ date: formattedDate }) 
+        .eq('id', purchase.id);
+      if (error) throw new Error(`Erro Supabase: ${error.message}`);
+      if (purchase.installmentGroupId) {
+        const { data: related, error: fetchErr } = await supabase
+          .from('transacoes')
+          .select('id, date, amount, description')
+          .eq('installment_group_id', purchase.installmentGroupId)
+          .gt('installment_number', purchase.installmentNumber || 0);
+        if (!fetchErr && related && related.length > 0) {
+          await Promise.all(related.map(item => {
+            const rd = new Date(item.date + 'T12:00:00');
+            rd.setMonth(rd.getMonth() + 1);
+            return supabase.from('transacoes')
+              .update({ date: rd.toISOString().split('T')[0] })
+              .eq('id', item.id);
+          }));
+        }
+      }
+      showNotify("Lançamento e parcelas postergados com sucesso!", "success");
+      await loadInitialData();
+    } catch (err: any) {
+      console.error('ERRO CRÍTICO NO ADIAMENTO:', err);
+      showNotify(`Falha no adiamento: ${err.message}`, "error");
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [currentUser, loadInitialData, showNotify]);
+
   const handleSaveBillDetail = async (cardId: string, manualItems: BillItem[], updatedPurchases: Transaction[]) => {
     if (!billToDetail || !currentUser) return;
     setIsSyncing(true);
     try {
       const syncDate = billToDetail.date;
       await supabase.from('transacoes').update({ bill_items: manualItems }).eq('id', billToDetail.id);
-      await Promise.all(updatedPurchases.map(p => updateTransaction(p.id, { amount: p.amount, description: p.description, date: syncDate })));
+      await Promise.all(updatedPurchases.map(p => {
+        return updateTransaction(p.id, { 
+          description: p.description, 
+          date: syncDate 
+        });
+      }));
       await loadInitialData();
       setBillToDetail(null);
-      showNotify("Fatura sincronizada!");
+      showNotify("Fatura e itens sincronizados!");
     } catch (e: any) { 
       showNotify("Erro ao sincronizar", "error"); 
     } finally { 
@@ -209,20 +252,79 @@ const App: React.FC = () => {
     }
   };
 
+  const handleAddCategory = async (name: string, type: TransactionType) => {
+    try {
+      await insertCategory({ name, type, isActive: true });
+      await loadInitialData();
+      showNotify("Grupo adicionado com sucesso!");
+    } catch (e: any) { showNotify("Erro ao adicionar grupo", "error"); }
+  };
+
+  const handleAddAccount = async (name: string, isCreditCard: boolean, initialBalance: number, closingDay?: number, initialBalanceDate?: string) => {
+    try {
+      await insertAccount({ name, isCreditCard, initialBalance, closingDay, initialBalanceDate, isActive: true });
+      await loadInitialData();
+      showNotify("Instituição adicionada!");
+    } catch (e: any) { showNotify("Erro ao adicionar instituição", "error"); }
+  };
+
+  const handleUpdateAccount = async (id: string, updates: Partial<Account>) => {
+    try {
+      await updateAccount(id, updates);
+      await loadInitialData();
+      showNotify("Alterações salvas com sucesso!");
+    } catch (e: any) { showNotify("Erro ao salvar alterações", "error"); }
+  };
+
+  const handleToggleCategory = async (id: string) => {
+    const cat = categories.find(c => c.id === id);
+    if (!cat) return;
+    try {
+      await updateCategory(id, { isActive: !cat.isActive });
+      await loadInitialData();
+    } catch (e: any) { showNotify("Erro ao atualizar status", "error"); }
+  };
+
+  const handleToggleAccount = async (id: string) => {
+    const acc = accounts.find(a => a.id === id);
+    if (!acc) return;
+    try {
+      await updateAccount(id, { isActive: !acc.isActive });
+      await loadInitialData();
+    } catch (e: any) { showNotify("Erro ao atualizar status", "error"); }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    if (!confirm("Excluir este grupo permanentemente?")) return;
+    try {
+      await deleteCategory(id);
+      await loadInitialData();
+      showNotify("Grupo removido");
+    } catch (e: any) { showNotify("Erro ao remover grupo", "error"); }
+  };
+
+  const handleDeleteAccount = async (id: string) => {
+    if (!confirm("Excluir esta instituição permanentemente?")) return;
+    try {
+      await deleteAccount(id);
+      await loadInitialData();
+      showNotify("Instituição removida");
+    } catch (e: any) { showNotify("Erro ao remover instituição", "error"); }
+  };
+
+  const handleChangeDefaultAccount = async (accountId: string) => {
+    showNotify("Conta padrão atualizada localmente");
+  };
+
   const stats: DashboardStats = useMemo(() => {
     const period = filterPeriod;
     const isShortcut = ['15', '30', '60'].includes(period);
-    
     const cardBillCat = categories.find(c => c.name.toLowerCase().trim() === 'cartão de crédito') || 
                         categories.find(c => c.name.toLowerCase().includes('cartão de crédito'));
-    
     const transferCat = categories.find(c => c.name.toLowerCase().includes('transferências entre contas'));
     const transferCatId = transferCat?.id;
-    
     const cardBillId = cardBillCat?.id;
     const creditAccountIds = accounts.filter(a => a.isCreditCard).map(a => a.id);
-
-    // Média Histórica de Gastos (Excluindo transferências e o mês atual)
     const now = new Date();
     const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const historicalExpenses = transactions.filter(t => 
@@ -231,7 +333,6 @@ const App: React.FC = () => {
       !creditAccountIds.includes(t.accountId) &&
       t.date.substring(0, 7) < currentMonthStr
     );
-    
     const monthTotals = new Map<string, number>();
     historicalExpenses.forEach(t => {
       const m = t.date.substring(0, 7);
@@ -240,7 +341,6 @@ const App: React.FC = () => {
     const avgMonthlyExpense = monthTotals.size > 0 
       ? Array.from(monthTotals.values()).reduce((a, b) => a + b, 0) / monthTotals.size 
       : 0;
-
     const filterByPeriod = (t: Transaction) => {
       if (!period) return true;
       if (isShortcut) {
@@ -251,19 +351,15 @@ const App: React.FC = () => {
       }
       return t.date.startsWith(period);
     };
-
     const validT = transactions.filter(filterByPeriod);
     const catMap = new Map<string, number>();
-
     const realOutflows = validT.filter(t => 
       t.type === TransactionType.EXPENSE && 
       !creditAccountIds.includes(t.accountId) &&
       t.categoryId !== transferCatId
     );
-    
     realOutflows.forEach(t => {
       catMap.set(t.categoryId, (catMap.get(t.categoryId) || 0) + t.amount);
-
       if (t.billItems && t.billItems.length > 0) {
         t.billItems.forEach(item => {
           if (item.categoryId !== transferCatId) {
@@ -276,7 +372,6 @@ const App: React.FC = () => {
         });
       }
     });
-
     const creditPurchases = validT.filter(t => 
       t.type === TransactionType.EXPENSE && 
       creditAccountIds.includes(t.accountId) &&
@@ -289,21 +384,17 @@ const App: React.FC = () => {
         catMap.set(cardBillId, current - t.amount);
       }
     });
-
     if (cardBillId) {
       const finalVal = catMap.get(cardBillId) || 0;
       if (finalVal < 0.01) catMap.set(cardBillId, 0);
     }
-
     const totalIncome = validT.filter(t => t.type === TransactionType.INCOME).reduce((s, t) => s + t.amount, 0);
     const totalExpense = realOutflows.reduce((s, t) => s + t.amount, 0);
-
     const expenseByCategory = categories
       .filter(c => c.type === TransactionType.EXPENSE && c.id !== transferCatId)
       .map(c => ({ name: c.name, value: catMap.get(c.id) || 0 }))
       .filter(i => i.value > 0.01)
       .sort((a, b) => b.value - a.value);
-
     return { 
       totalIncome, 
       totalExpense, 
@@ -337,7 +428,7 @@ const App: React.FC = () => {
             <div className="flex flex-col">
               <h1 className="text-lg font-black text-slate-900 tracking-tight uppercase leading-none">BO FINANCE</h1>
               <span className={`text-[7px] font-black uppercase tracking-widest mt-0.5 ${cloudMessage.ok ? 'text-emerald-500' : 'text-rose-500'}`}>
-                {cloudMessage.msg}
+                {cloudMessage.msg} • v{APP_VERSION}
               </span>
             </div>
           </div>
@@ -368,7 +459,26 @@ const App: React.FC = () => {
             onDeleteTransaction={handleDeleteTransaction} 
           />
         )}
-        {activeTab === 'settings' && <Settings categories={categories} accounts={accounts} transactions={transactions} currentUser={currentUser} currentHint="" onAddCategory={()=>{}} onAddAccount={()=>{}} onUpdateAccount={()=>{}} onToggleCategory={()=>{}} onToggleAccount={()=>{}} onDeleteCategory={()=>{}} onDeleteAccount={()=>{}} onImportData={()=>{}} onChangePassword={()=>{}} onChangeDefaultAccount={()=>{}} onLogout={handleManualLogout} />}
+        {activeTab === 'settings' && (
+          <Settings 
+            categories={categories} 
+            accounts={accounts} 
+            transactions={transactions} 
+            currentUser={currentUser} 
+            currentHint="" 
+            onAddCategory={handleAddCategory} 
+            onAddAccount={handleAddAccount} 
+            onUpdateAccount={handleUpdateAccount} 
+            onToggleCategory={handleToggleCategory} 
+            onToggleAccount={handleToggleAccount} 
+            onDeleteCategory={handleDeleteCategory} 
+            onDeleteAccount={handleDeleteAccount} 
+            onImportData={()=>{}} 
+            onChangePassword={()=>{}} 
+            onChangeDefaultAccount={handleChangeDefaultAccount} 
+            onLogout={handleManualLogout} 
+          />
+        )}
       </main>
       <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 w-[95%] max-w-md bg-[#0f172a] rounded-[32px] p-4 flex justify-around items-center shadow-2xl z-50 border border-white/5">
         <button onClick={() => setActiveTab('dash')} className={`flex-1 flex flex-col items-center gap-1 ${activeTab === 'dash' ? 'text-blue-400' : 'text-slate-500'}`}><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg><span className="text-[8px] font-black uppercase">Dash</span></button>
@@ -383,7 +493,7 @@ const App: React.FC = () => {
       )}
       {billToDetail && (
         <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-6">
-          <BillDetailModal transaction={billToDetail} categories={categories} accounts={accounts} allTransactions={transactions} onCancel={() => setBillToDetail(null)} onSave={handleSaveBillDetail} />
+          <BillDetailModal transaction={billToDetail} categories={categories} accounts={accounts} allTransactions={transactions} onCancel={() => setBillToDetail(null)} onSave={handleSaveBillDetail} onPostponePurchase={handlePostponePurchase} onDeletePurchase={handleDeleteTransaction} />
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
-
 import React, { useState, useMemo } from 'react';
 import { Transaction, Category, BillItem, TransactionType, Account } from '../types';
 import Button from './Button';
+import PurchaseCard from './PurchaseCard';
 
 interface BillDetailModalProps {
   transaction: Transaction;
@@ -10,6 +10,8 @@ interface BillDetailModalProps {
   allTransactions: Transaction[];
   onSave: (cardId: string, items: BillItem[], updatedPurchases: Transaction[]) => void;
   onCancel: () => void;
+  onPostponePurchase?: (purchase: Transaction) => void;
+  onDeletePurchase?: (id: string) => void;
 }
 
 const BillDetailModal: React.FC<BillDetailModalProps> = ({ 
@@ -18,7 +20,9 @@ const BillDetailModal: React.FC<BillDetailModalProps> = ({
   accounts,
   allTransactions,
   onSave, 
-  onCancel 
+  onCancel,
+  onPostponePurchase,
+  onDeletePurchase
 }) => {
   const cardId = useMemo(() => {
     const match = transaction.description.match(/\[CARD:([\w-]+)\]/i);
@@ -31,10 +35,8 @@ const BillDetailModal: React.FC<BillDetailModalProps> = ({
 
   const cardName = cardAccount?.name || 'Cartão não identificado';
   
-  // Itens manuais (anuidades, taxas)
   const [manualItems, setManualItems] = useState<BillItem[]>(transaction.billItems || []);
 
-  // Transações reais detectadas no período
   const initialPurchases = useMemo(() => {
     if (!cardId) return [];
     const billDate = new Date(transaction.date + 'T12:00:00');
@@ -49,7 +51,6 @@ const BillDetailModal: React.FC<BillDetailModalProps> = ({
     });
   }, [cardId, transaction.id, transaction.date, allTransactions]);
 
-  // Estado para permitir editar as transações reais diretamente aqui
   const [editablePurchases, setEditablePurchases] = useState<Transaction[]>(initialPurchases);
 
   const activeExpenseCategories = categories.filter(c => c.isActive && c.type === TransactionType.EXPENSE);
@@ -58,22 +59,13 @@ const BillDetailModal: React.FC<BillDetailModalProps> = ({
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 
-  const formatValueForInput = (val: number) => {
-    if (isNaN(val)) return "0,00";
-    const isNeg = val < 0;
-    const absVal = Math.abs(val);
-    const formatted = absVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return isNeg ? `-${formatted}` : formatted;
-  };
-
   const handlePurchaseChange = (id: string, field: 'description' | 'amount', value: string) => {
     setEditablePurchases(prev => prev.map(p => {
       if (p.id !== id) return p;
       if (field === 'amount') {
-        // CIRÚRGICO: Permite o caractere '-' para estornos
         const isNegative = value.includes('-');
         const digits = value.replace(/\D/g, '');
-        if (!digits && isNegative) return { ...p, amount: -0 }; // Estado intermediário enquanto digita o sinal
+        if (!digits && isNegative) return { ...p, amount: -0 };
         const amount = (Number(digits) / 100) * (isNegative ? -1 : 1);
         return { ...p, amount };
       }
@@ -85,7 +77,6 @@ const BillDetailModal: React.FC<BillDetailModalProps> = ({
     setManualItems(prev => prev.map(item => {
       if (item.id !== id) return item;
       if (field === 'amount' && typeof value === 'string') {
-        // CIRÚRGICO: Permite o caractere '-' para estornos manuais
         const isNegative = value.includes('-');
         const digits = value.replace(/\D/g, '');
         if (!digits && isNegative) return { ...item, amount: -0 };
@@ -109,6 +100,19 @@ const BillDetailModal: React.FC<BillDetailModalProps> = ({
     setManualItems(manualItems.filter(i => i.id !== id));
   };
 
+  const handlePostponeAction = (purchase: Transaction) => {
+    if (typeof onPostponePurchase !== 'function') return;
+    onPostponePurchase(purchase);
+    setEditablePurchases(prev => prev.filter(item => item.id !== purchase.id));
+  };
+
+  const handleDeleteAction = (id: string) => {
+    if (typeof onDeletePurchase !== 'function') return;
+    onDeletePurchase(id);
+    // Feedback visual imediato: remove da lista local do modal
+    setEditablePurchases(prev => prev.filter(item => item.id !== id));
+  };
+
   return (
     <div className="bg-white p-8 rounded-[40px] shadow-2xl border border-slate-100 w-full max-w-2xl max-h-[90vh] overflow-y-auto font-['Outfit'] space-y-6">
       <div className="text-center">
@@ -117,7 +121,6 @@ const BillDetailModal: React.FC<BillDetailModalProps> = ({
         <p className="text-[10px] font-black text-indigo-500 uppercase mt-1">Total da Fatura: {formatCurrency(transaction.amount)}</p>
       </div>
 
-      {/* Seção de Lançamentos Reais (Compras) */}
       <div className="space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Gastos no Cartão (Editar Compras)</h4>
@@ -129,31 +132,19 @@ const BillDetailModal: React.FC<BillDetailModalProps> = ({
             <p className="text-[9px] font-bold text-slate-300 uppercase text-center py-4 italic tracking-widest">Nenhuma compra individual encontrada</p>
           ) : (
             editablePurchases.map(p => (
-              <div key={p.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[8px] font-black text-slate-400 uppercase ml-1">Descrição do Lançamento</label>
-                  <input 
-                    value={p.description} 
-                    onChange={e => handlePurchaseChange(p.id, 'description', e.target.value)}
-                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase outline-none"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[8px] font-black text-emerald-500 uppercase ml-1">Valor R$</label>
-                  <input 
-                    type="text"
-                    value={formatValueForInput(p.amount)} 
-                    onChange={e => handlePurchaseChange(p.id, 'amount', e.target.value)}
-                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black outline-none text-emerald-600"
-                  />
-                </div>
-              </div>
+              <PurchaseCard 
+                key={p.id} 
+                purchase={p} 
+                onPostponePurchase={handlePostponeAction}
+                onDeletePurchase={handleDeleteAction}
+                onAmountChange={(val) => handlePurchaseChange(p.id, 'amount', val)}
+                onDescriptionChange={(val) => handlePurchaseChange(p.id, 'description', val)}
+              />
             ))
           )}
         </div>
       </div>
 
-      {/* Seção de Itens Manuais */}
       <div className="space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ajustes da Fatura (Anuidade/Taxas)</h4>
@@ -180,7 +171,7 @@ const BillDetailModal: React.FC<BillDetailModalProps> = ({
                     <label className="text-[8px] font-black text-blue-500 uppercase ml-1">Valor R$</label>
                     <input 
                       type="text"
-                      value={formatValueForInput(item.amount)} 
+                      value={(item.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
                       onChange={e => handleManualItemChange(item.id, 'amount', e.target.value)}
                       className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black outline-none text-blue-600"
                     />
@@ -205,7 +196,6 @@ const BillDetailModal: React.FC<BillDetailModalProps> = ({
         </div>
       </div>
 
-      {/* Resumo da Conciliação */}
       <div className={`p-6 rounded-[32px] text-center border transition-all ${Math.abs(difference) < 0.01 ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-rose-50 border-rose-100 text-rose-700'}`}>
         <p className="text-[9px] font-black uppercase tracking-widest">Diferença Restante</p>
         <p className="text-3xl font-black mt-1 tracking-tighter">{formatCurrency(difference)}</p>

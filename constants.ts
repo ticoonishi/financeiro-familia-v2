@@ -1,7 +1,6 @@
-
 import { Category, Account, TransactionType } from './types';
 
-export const APP_VERSION = '4.1.0-DEFINITIVE'; 
+export const APP_VERSION = '1.3'; 
 
 export const INITIAL_INCOME_CATEGORIES: Category[] = [
   { id: 'inc-1', name: 'Aluguel de imóvel', type: TransactionType.INCOME, isActive: true },
